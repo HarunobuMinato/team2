@@ -1,0 +1,40 @@
+import { Inspection } from '@/types/delivery';
+
+export const mockInspections: Inspection[] = [
+  {
+    id: 'inspection-001',
+    deliveryId: 'delivery-002',
+    step: 'receipt',
+    receivedDate: new Date('2024-02-20'),
+    inspectionDate: undefined,
+    inspectionNotes: undefined,
+    inspectionResult: undefined,
+    completedDate: undefined,
+    createdAt: new Date('2024-02-20'),
+    updatedAt: new Date('2024-02-20'),
+  },
+  {
+    id: 'inspection-002',
+    deliveryId: 'delivery-003',
+    step: 'inspection',
+    receivedDate: new Date('2024-02-08'),
+    inspectionDate: new Date('2024-02-12'),
+    inspectionNotes: 'すべてOK、異常なし',
+    inspectionResult: 'ok',
+    completedDate: new Date('2024-02-12'),
+    createdAt: new Date('2024-02-08'),
+    updatedAt: new Date('2024-02-12'),
+  },
+  {
+    id: 'inspection-003',
+    deliveryId: 'delivery-004',
+    step: 'completed',
+    receivedDate: new Date('2024-01-30'),
+    inspectionDate: new Date('2024-02-01'),
+    inspectionNotes: '問題なし、承認',
+    inspectionResult: 'ok',
+    completedDate: new Date('2024-02-01'),
+    createdAt: new Date('2024-01-30'),
+    updatedAt: new Date('2024-02-01'),
+  },
+];
