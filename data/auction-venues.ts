@@ -1,0 +1,48 @@
+import { AuctionVenue } from '@/types/auction';
+
+export const mockAuctionVenues: AuctionVenue[] = [
+  {
+    id: 'venue-001',
+    venueCode: 'BAYSTK',
+    name: 'ベイオーク東京',
+    address: '東京都江東区豊洲',
+    phone: '03-XXXX-XXXX',
+    fax: '03-XXXX-XXXX',
+    isActive: true,
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+  },
+  {
+    id: 'venue-002',
+    venueCode: 'BAYOSAKA',
+    name: 'ベイオーク大阪',
+    address: '大阪府大阪市此花区',
+    phone: '06-XXXX-XXXX',
+    fax: '06-XXXX-XXXX',
+    isActive: true,
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+  },
+  {
+    id: 'venue-003',
+    venueCode: 'BAYNAG',
+    name: 'ベイオーク名古屋',
+    address: '愛知県名古屋市港区',
+    phone: '052-XXXX-XXXX',
+    fax: '052-XXXX-XXXX',
+    isActive: true,
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+  },
+  {
+    id: 'venue-004',
+    venueCode: 'BAYFUKU',
+    name: 'ベイオーク福岡',
+    address: '福岡県福岡市東区',
+    phone: '092-XXXX-XXXX',
+    fax: '092-XXXX-XXXX',
+    isActive: true,
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+  },
+];

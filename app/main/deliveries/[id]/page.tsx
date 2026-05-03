@@ -1,52 +1,176 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardBody, CardHeader } from '@/components/ui/card';
 import { PageHeader } from '@/components/layouts/page-header';
 import { Badge } from '@/components/ui/badge';
-import { mockDeliveries } from '@/data/deliveries';
-import { mockOrders } from '@/data/orders';
-import { mockClients } from '@/data/clients';
-import { mockPurchases } from '@/data/purchases';
-import {
-  DELIVERY_STATUS_LABELS,
-  DELIVERY_STATUS_COLORS,
-} from '@/constants/status';
 import { formatCurrency, formatDateJP } from '@/lib/utils';
+
+interface Order {
+  id: number;
+  order_number: string;
+  order_type: string;
+  client_id: number;
+  total_amount: number;
+}
+
+interface Client {
+  id: number;
+  name: string;
+  contact_person?: string;
+  phone?: string;
+  email?: string;
+}
+
+interface PurchaseRecord {
+  id: number;
+  vehicle_name: string;
+  maker?: string;
+  year?: number;
+  mileage?: number;
+  bid_price: number;
+}
+
+interface Delivery {
+  id: number;
+  order_id: number;
+  delivery_number: string;
+  vehicle_count: number;
+  delivery_date: string;
+  delivery_location?: string;
+  total_amount: number;
+  notes?: string;
+  status: string;
+  created_at: string;
+}
 
 export default function DeliveryDetailPage() {
   const params = useParams();
   const deliveryId = params.id as string;
-  const [isEditing, setIsEditing] = React.useState(false);
-  const [isPrinting, setIsPrinting] = React.useState(false);
 
-  const delivery = mockDeliveries.find((d) => d.id === deliveryId);
-  
-  // 仕入れ情報を取得（purchaseId がある場合）
-  const purchase = delivery?.purchaseId
-    ? mockPurchases.find((p) => p.id === delivery.purchaseId)
-    : null;
+  const [delivery, setDelivery] = useState<Delivery | null>(null);
+  const [order, setOrder] = useState<Order | null>(null);
+  const [client, setClient] = useState<Client | null>(null);
+  const [purchaseRecords, setPurchaseRecords] = useState<PurchaseRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // 受注情報を取得
-  const order = purchase
-    ? mockOrders.find((o) => o.id === purchase.orderId)
-    : delivery && mockOrders.find((o) => o.id === delivery.orderId);
-  
-  const client = order ? mockClients.find((c) => c.id === order.clientId) : null;
+  // 納品書詳細データを取得
+  useEffect(() => {
+    const fetchDeliveryDetail = async () => {
+      try {
+        setLoading(true);
+        setError(null);
 
-  // 利益計算（受注金額 - 仕入れ金額）
-  const calculateProfit = (): number => {
-    if (!order || !purchase) return 0;
-    return order.totalAmount - purchase.totalPurchaseAmount;
+        console.log(`📋 納品書 ${deliveryId} の詳細を取得中...`);
+
+        // 納品書を取得
+        const deliveryRes = await fetch(`/api/deliveries/${deliveryId}`);
+        const deliveryData = await deliveryRes.json();
+
+        if (!deliveryData.success || !deliveryData.data) {
+          throw new Error('納品書が見つかりません');
+        }
+
+        const deliveryInfo = deliveryData.data;
+        setDelivery(deliveryInfo);
+
+        console.log('✅ 納品書取得完了:', deliveryInfo);
+
+        // 受注情報を取得
+        const orderRes = await fetch(`/api/orders/${deliveryInfo.order_id}`);
+        const orderData = await orderRes.json();
+
+        if (orderData.success && orderData.data) {
+          setOrder(orderData.data);
+
+          // クライアント情報を取得
+          if (orderData.data.client_id) {
+            const clientRes = await fetch(
+              `/api/clients/${orderData.data.client_id}`
+            );
+            const clientData = await clientRes.json();
+
+            if (clientData.success && clientData.data) {
+              setClient(clientData.data);
+              console.log('✅ クライアント取得完了');
+            }
+          }
+
+          console.log('✅ 受注取得完了');
+        }
+
+        // 納品書に紐づく仕入実績を取得
+        const purchasesRes = await fetch(
+          `/api/delivery-purchase-records/${deliveryInfo.id}`
+        );
+        const purchasesData = await purchasesRes.json();
+
+        if (purchasesData.success && Array.isArray(purchasesData.data)) {
+          setPurchaseRecords(purchasesData.data);
+          console.log('✅ 仕入実績取得完了:', purchasesData.data.length, '件');
+        }
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'エラーが発生しました';
+        console.error('❌ 詳細取得エラー:', errorMessage);
+        setError(errorMessage);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (deliveryId) {
+      fetchDeliveryDetail();
+    }
+  }, [deliveryId]);
+
+  // ステータス色
+  const getStatusColor = (status: string): string => {
+    const colors: Record<string, string> = {
+      draft: 'bg-gray-100 text-gray-800',
+      issued: 'bg-blue-100 text-blue-800',
+      received: 'bg-green-100 text-green-800',
+      inspected: 'bg-amber-100 text-amber-800',
+      completed: 'bg-gray-400 text-gray-800',
+    };
+    return colors[status] || 'bg-gray-100 text-gray-800';
   };
 
-  if (!delivery) {
+  const getStatusLabel = (status: string): string => {
+    const labels: Record<string, string> = {
+      draft: '下書き',
+      issued: '発行済み',
+      received: '受領済み',
+      inspected: '検収済み',
+      completed: '完了',
+    };
+    return labels[status] || status;
+  };
+
+
+  // ✅ 修正後
+  const totalVehicleAmount = purchaseRecords.reduce(
+    (sum, p) => sum + (parseInt(p?.bid_price) || 0),
+    0
+  );
+
+  if (loading) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-500 text-lg mb-4">納品書が見つかりません</p>
+        <p className="text-gray-500 text-lg">読み込み中...</p>
+      </div>
+    );
+  }
+
+  if (error || !delivery) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-gray-500 text-lg mb-4">
+          {error || '納品書が見つかりません'}
+        </p>
         <Link href="/main/deliveries">
           <Button>納品書一覧に戻る</Button>
         </Link>
@@ -54,22 +178,17 @@ export default function DeliveryDetailPage() {
     );
   }
 
-  const profit = calculateProfit();
-  const profitMargin = order ? ((profit / order.totalAmount) * 100).toFixed(1) : '0';
-
   return (
     <div>
       <PageHeader
         title="納品書詳細"
-        subtitle={delivery.deliveryNumber}
+        subtitle={delivery.delivery_number}
         actions={
           <div className="flex gap-2">
             <Button
               variant="secondary"
               onClick={() => {
-                setIsPrinting(true);
                 window.print();
-                setIsPrinting(false);
               }}
             >
               🖨️ 印刷
@@ -82,7 +201,7 @@ export default function DeliveryDetailPage() {
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* 基本情報 */}
+        {/* メイン情報 */}
         <div className="lg:col-span-2">
           {/* 納品書情報 */}
           <Card className="mb-6">
@@ -91,8 +210,8 @@ export default function DeliveryDetailPage() {
                 <h2 className="text-lg font-semibold text-gray-900">
                   納品書情報
                 </h2>
-                <Badge variant={DELIVERY_STATUS_COLORS[delivery.status]}>
-                  {DELIVERY_STATUS_LABELS[delivery.status]}
+                <Badge variant={getStatusColor(delivery.status)}>
+                  {getStatusLabel(delivery.status)}
                 </Badge>
               </div>
             </CardHeader>
@@ -101,48 +220,45 @@ export default function DeliveryDetailPage() {
                 <div>
                   <p className="text-sm text-gray-600 mb-1">納品書番号</p>
                   <p className="text-lg font-semibold text-gray-900">
-                    {delivery.deliveryNumber}
+                    {delivery.delivery_number}
                   </p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600 mb-1">納品日</p>
                   <p className="text-base text-gray-900">
-                    {formatDateJP(delivery.deliveryDate)}
+                    {formatDateJP(delivery.delivery_date)}
                   </p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600 mb-1">納品場所</p>
                   <p className="text-base text-gray-900">
-                    {delivery.deliveryLocation || '-'}
+                    {delivery.delivery_location || '未指定'}
                   </p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600 mb-1">作成日</p>
                   <p className="text-base text-gray-900">
-                    {delivery.createdAt
-                      ? formatDateJP(delivery.createdAt)
-                      : '-'}
+                    {delivery.created_at ? formatDateJP(delivery.created_at) : '—'}
                   </p>
                 </div>
               </div>
             </CardBody>
           </Card>
 
-          {/* 受注・仕入れ情報 */}
+          {/* 受注・顧客情報 */}
           <Card className="mb-6">
             <CardHeader>
               <h2 className="text-lg font-semibold text-gray-900">
-                受注・仕入れ情報
+                受注・顧客情報
               </h2>
             </CardHeader>
             <CardBody className="space-y-4">
-              {/* 受注情報 */}
               <div>
                 <p className="text-sm text-gray-600 mb-2">受注情報</p>
                 <div className="bg-gray-50 rounded-lg p-3">
                   <div className="flex items-center justify-between mb-2">
                     <p className="font-medium text-gray-900">
-                      {order?.orderNumber || '-'}
+                      {order?.order_number || '-'}
                     </p>
                     {order && (
                       <Link
@@ -153,73 +269,35 @@ export default function DeliveryDetailPage() {
                       </Link>
                     )}
                   </div>
-                  <p className="text-sm text-gray-600">
-                    {order?.orderType === 'buy'
-                      ? '買い注文'
-                      : order?.orderType === 'sell'
-                        ? '売り注文'
-                        : '仲介売買'}
-                  </p>
-                </div>
-              </div>
-
-              {/* 仕入れ情報 */}
-              {purchase && (
-                <div>
-                  <p className="text-sm text-gray-600 mb-2">仕入れ情報</p>
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-2">
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <p className="text-gray-600">注文種別</p>
                       <p className="font-medium text-gray-900">
-                        {purchase.purchaseNumber}
+                        {order?.order_type === 'buy'
+                          ? '買い注文'
+                          : order?.order_type === 'sell'
+                            ? '売り注文'
+                            : '仲介売買'}
                       </p>
-                      <Link
-                        href={`/main/purchases/${purchase.id}`}
-                        className="text-blue-600 hover:text-blue-700 text-sm"
-                      >
-                        詳細 →
-                      </Link>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div>
-                        <p className="text-gray-600">車種</p>
-                        <p className="font-medium text-gray-900">
-                          {purchase.vehicleName}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600">オークション日</p>
-                        <p className="font-medium text-gray-900">
-                          {formatDateJP(purchase.auctionDate)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600">仕入れ金額</p>
-                        <p className="font-medium text-green-600">
-                          {formatCurrency(purchase.totalPurchaseAmount)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600">支払い状況</p>
-                        <p className="font-medium text-gray-900">
-                          {purchase.paymentStatus === 'paid'
-                            ? '支払済み'
-                            : '未支払い'}
-                        </p>
-                      </div>
+                    <div>
+                      <p className="text-gray-600">受注金額</p>
+                      <p className="font-medium text-blue-600">
+                        {formatCurrency(order?.total_amount || 0)}
+                      </p>
                     </div>
                   </div>
                 </div>
-              )}
+              </div>
 
-              {/* 顧客情報 */}
               <div>
                 <p className="text-sm text-gray-600 mb-2">顧客情報</p>
                 <div className="bg-gray-50 rounded-lg p-3">
                   <p className="font-medium text-gray-900 mb-1">
                     {client?.name || '-'}
                   </p>
-                  {client?.contactPerson && (
-                    <p className="text-sm text-gray-600">{client.contactPerson}</p>
+                  {client?.contact_person && (
+                    <p className="text-sm text-gray-600">{client.contact_person}</p>
                   )}
                   {client?.phone && (
                     <p className="text-sm text-gray-600">{client.phone}</p>
@@ -232,48 +310,68 @@ export default function DeliveryDetailPage() {
             </CardBody>
           </Card>
 
-          {/* 車両情報（仕入れから） */}
-          {purchase && (
+          {/* 納品車両一覧 */}
+          {purchaseRecords.length > 0 && (
             <Card className="mb-6">
               <CardHeader>
                 <h2 className="text-lg font-semibold text-gray-900">
-                  車両情報
+                  納品車両一覧
                 </h2>
               </CardHeader>
               <CardBody>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1">車種</p>
-                    <p className="text-base font-medium text-gray-900">
-                      {purchase.vehicleName}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1">メーカー</p>
-                    <p className="text-base text-gray-900">
-                      {purchase.maker || '-'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1">型式</p>
-                    <p className="text-base text-gray-900">
-                      {purchase.model || '-'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1">年式</p>
-                    <p className="text-base text-gray-900">
-                      {purchase.year || '-'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1">走行距離</p>
-                    <p className="text-base text-gray-900">
-                      {purchase.mileage
-                        ? `${purchase.mileage.toLocaleString()}km`
-                        : '-'}
-                    </p>
-                  </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-3 px-3 font-semibold text-gray-700">
+                          車種名
+                        </th>
+                        <th className="text-left py-3 px-3 font-semibold text-gray-700">
+                          メーカー
+                        </th>
+                        <th className="text-center py-3 px-3 font-semibold text-gray-700">
+                          年式
+                        </th>
+                        <th className="text-center py-3 px-3 font-semibold text-gray-700">
+                          走行距離
+                        </th>
+                        <th className="text-right py-3 px-3 font-semibold text-gray-700">
+                          落札価格
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {purchaseRecords.map((purchase) => (
+                        <tr
+                          key={purchase?.id}
+                          className="border-b border-gray-100 hover:bg-gray-50"
+                        >
+                          <td className="py-3 px-3 text-gray-900">
+                            <Link
+                              href={`/main/vehicles/purchase/${purchase?.id}`}
+                              className="text-blue-600 hover:text-blue-700 font-medium"
+                            >
+                              {purchase?.vehicle_name}
+                            </Link>
+                          </td>
+                          <td className="py-3 px-3 text-gray-600">
+                            {purchase?.maker || '-'}
+                          </td>
+                          <td className="py-3 px-3 text-center text-gray-600">
+                            {purchase?.year || '-'}年
+                          </td>
+                          <td className="py-3 px-3 text-center text-gray-600">
+                            {purchase?.mileage
+                              ? `${purchase.mileage.toLocaleString()}km`
+                              : '-'}
+                          </td>
+                          <td className="py-3 px-3 text-right font-medium text-gray-900">
+                            {formatCurrency(purchase?.bid_price || 0)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </CardBody>
             </Card>
@@ -294,191 +392,83 @@ export default function DeliveryDetailPage() {
           )}
         </div>
 
-        {/* 金額情報 */}
+        {/* 右サイドバー - 金額情報 */}
         <div>
           <Card className="sticky top-8 mb-6">
             <CardHeader>
               <h2 className="text-lg font-semibold text-gray-900">金額情報</h2>
             </CardHeader>
             <CardBody>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {/* 受注金額 */}
                 {order && (
                   <>
                     <div className="pb-3 border-b border-gray-200">
-                      <p className="text-xs text-gray-600 mb-1">受注金額</p>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">車両価格</span>
-                        <span className="font-medium">
-                          {formatCurrency(order.vehiclePrice)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">
-                          {order.orderType === 'buy' ? '買手' : '売手'}手数料
-                        </span>
-                        <span className="font-medium">
-                          {formatCurrency(
-                            order.orderType === 'buy'
-                              ? order.buyCommission
-                              : order.sellCommission
-                          )}
-                        </span>
-                      </div>
-                      <div className="flex justify-between font-semibold text-gray-900 mt-2">
-                        <span>受注合計</span>
-                        <span className="text-blue-600">
-                          {formatCurrency(order.totalAmount)}
-                        </span>
+                      <p className="text-xs text-gray-600 mb-2 font-medium">
+                        受注情報
+                      </p>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">受注合計</span>
+                          <span className="font-medium">
+                            {formatCurrency(order.total_amount)}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </>
                 )}
 
-                {/* 仕入れ金額 */}
-                {purchase && (
-                  <>
-                    <div className="pb-3 border-b border-gray-200">
-                      <p className="text-xs text-gray-600 mb-1">仕入れ金額</p>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">落札価格</span>
-                        <span className="font-medium">
-                          {formatCurrency(purchase.bidPrice)}
-                        </span>
-                      </div>
-                      {purchase.auctionFee > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">オークション手数料</span>
-                          <span className="font-medium">
-                            {formatCurrency(purchase.auctionFee)}
-                          </span>
-                        </div>
-                      )}
-                      {purchase.transportFee > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">陸送費</span>
-                          <span className="font-medium">
-                            {formatCurrency(purchase.transportFee)}
-                          </span>
-                        </div>
-                      )}
-                      {purchase.otherFee > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">その他費用</span>
-                          <span className="font-medium">
-                            {formatCurrency(purchase.otherFee)}
-                          </span>
-                        </div>
-                      )}
-                      {purchase.tax > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">消費税</span>
-                          <span className="font-medium">
-                            {formatCurrency(purchase.tax)}
-                          </span>
-                        </div>
-                      )}
-                      <div className="flex justify-between font-semibold text-gray-900 mt-2">
-                        <span>仕入れ合計</span>
-                        <span className="text-green-600">
-                          {formatCurrency(purchase.totalPurchaseAmount)}
-                        </span>
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {/* 利益分析 */}
-                {order && purchase && (
-                  <div className="pb-3 border-b border-gray-200">
-                    <p className="text-xs text-gray-600 mb-2">利益分析</p>
+                {/* 納品車両情報 */}
+                <div className="pb-3 border-b border-gray-200">
+                  <p className="text-xs text-gray-600 mb-2 font-medium">
+                    納品車両情報
+                  </p>
+                  <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-gray-600">利益</span>
-                      <span className={`font-semibold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {formatCurrency(profit)}
+                      <span className="text-gray-600">台数</span>
+                      <span className="font-medium">
+                        {purchaseRecords.length}台
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">利益率</span>
-                      <span className={`font-semibold ${parseFloat(profitMargin) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {profitMargin}%
+                      <span className="text-gray-600">車両合計</span>
+                      <span className="font-medium">
+                        {formatCurrency(totalVehicleAmount)}
                       </span>
-                    </div>
-                  </div>
-                )}
-
-                {/* 納品書額（レガシー対応） */}
-                <div>
-                  <p className="text-xs text-gray-600 mb-2">納品書金額</p>
-                  <div className="space-y-2">
-                    {delivery.vehiclePrice > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">車両価格</span>
-                        <span className="font-medium">
-                          {formatCurrency(delivery.vehiclePrice)}
-                        </span>
-                      </div>
-                    )}
-
-                    {delivery.commission > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">手数料</span>
-                        <span className="font-medium">
-                          {formatCurrency(delivery.commission)}
-                        </span>
-                      </div>
-                    )}
-
-                    {delivery.otherFee !== 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">その他費用</span>
-                        <span className="font-medium">
-                          {formatCurrency(delivery.otherFee)}
-                        </span>
-                      </div>
-                    )}
-
-                    {delivery.tax > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">消費税（10%）</span>
-                        <span className="font-medium">
-                          {formatCurrency(delivery.tax)}
-                        </span>
-                      </div>
-                    )}
-
-                    <div className="border-t border-gray-200 pt-2">
-                      <div className="flex justify-between">
-                        <span className="font-semibold text-gray-900">
-                          納品書合計
-                        </span>
-                        <span className="text-xl font-bold text-blue-600">
-                          {formatCurrency(delivery.totalAmount)}
-                        </span>
-                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              {/* アクション */}
-              <div className="mt-6 space-y-2">
-                {delivery.status === 'issued' && (
-                  <Button variant="primary" size="sm" className="w-full">
-                    📧 得意先に発行
+                {/* 納品書金額 */}
+                <div>
+                  <p className="text-xs text-gray-600 mb-2 font-medium">
+                    納品書金額
+                  </p>
+                  <div className="flex justify-between items-center border-t border-gray-200 pt-3">
+                    <span className="font-semibold text-gray-900">
+                      合計
+                    </span>
+                    <span className="text-xl font-bold text-blue-600">
+                      {formatCurrency(delivery.total_amount)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* アクション */}
+                <div className="mt-6 space-y-2 border-t border-gray-200 pt-4">
+                  {delivery.status === 'issued' && (
+                    <Button variant="primary" size="sm" className="w-full">
+                      📧 得意先に発行
+                    </Button>
+                  )}
+                  <Button variant="secondary" size="sm" className="w-full">
+                    ✏️ 編集
                   </Button>
-                )}
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => setIsEditing(!isEditing)}
-                >
-                  ✏️ 編集
-                </Button>
-                <Button variant="secondary" size="sm" className="w-full">
-                  🗑️ 削除
-                </Button>
+                  <Button variant="secondary" size="sm" className="w-full">
+                    🗑️ 削除
+                  </Button>
+                </div>
               </div>
             </CardBody>
           </Card>
@@ -493,8 +483,8 @@ export default function DeliveryDetailPage() {
             <CardBody className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-gray-600">発行状況</span>
-                <Badge variant={DELIVERY_STATUS_COLORS[delivery.status]}>
-                  {DELIVERY_STATUS_LABELS[delivery.status]}
+                <Badge variant={getStatusColor(delivery.status)}>
+                  {getStatusLabel(delivery.status)}
                 </Badge>
               </div>
               <div>
@@ -506,9 +496,7 @@ export default function DeliveryDetailPage() {
               <div>
                 <p className="text-sm text-gray-600 mb-1">作成日時</p>
                 <p className="text-base text-gray-900">
-                  {delivery.createdAt
-                    ? formatDateJP(delivery.createdAt)
-                    : '-'}
+                  {delivery.created_at ? formatDateJP(delivery.created_at) : '-'}
                 </p>
               </div>
             </CardBody>

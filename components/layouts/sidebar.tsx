@@ -49,6 +49,21 @@ const mainMenuItems: SidebarItem[] = [
     ],
   },
   {
+    label: '出荷管理',
+    href: '/main/shipments',
+    icon: '🚚',
+    children: [
+      {
+        label: '出荷一覧',
+        href: '/main/shipments',
+      },
+      {
+        label: '出荷登録',
+        href: '/main/shipments/new',
+      },
+    ],
+  },
+  {
     label: '納品書管理',
     href: '/main/deliveries',
     icon: '📄',

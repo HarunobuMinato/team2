@@ -1,35 +1,28 @@
-// ユーザーロール
+// ==========================================
+// ユーザー認証関連の型定義
+// ==========================================
+
 export type UserRole = 'admin' | 'sales' | 'office' | 'customer' | 'vendor';
 
-// ユーザー情報
 export interface User {
   id: string;
   email: string;
+  passwordHash: string;
   name: string;
   role: UserRole;
-  clientId?: string;
+  clientId?: string; // 顧客/業者ユーザーの場合
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
 
-// ログイン要求
-export interface LoginRequest {
-  email: string;
-  password: string;
-}
-
-// ログイン レスポンス
-export interface LoginResponse {
-  user: User;
-  token: string;
-}
-
-// 認証コンテキスト
-export interface AuthContext {
+export interface AuthState {
   user: User | null;
   isLoading: boolean;
-  isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  error: string | null;
+}
+
+export interface LoginCredentials {
+  email: string;
+  password: string;
 }

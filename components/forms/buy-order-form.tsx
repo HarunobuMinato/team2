@@ -1,432 +1,275 @@
+// ============================================
+// 3. components/forms/buy-order-form.tsx【修正版】
+// ============================================
+
 'use client';
 
-import React from 'react';
-import { Card, CardBody, CardHeader } from '@/components/ui/card';
+import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { Card, CardBody, CardHeader, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { BuyOrderFormInput } from '@/types/order';
+import { DesiredVehicleFormInput } from '@/types/desired-vehicle';
+
+interface Client {
+  id: number;
+  name: string;
+  client_code: string;
+  contact_person?: string;
+}
+
+interface User {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+}
 
 interface BuyOrderFormProps {
-  orderId?: string;
-  onSubmit: (formData: any) => void;
+  onSubmit: (formData: BuyOrderFormInput) => void;
   isLoading?: boolean;
 }
 
-export function BuyOrderForm({
-  orderId,
+export const BuyOrderForm: React.FC<BuyOrderFormProps> = ({
   onSubmit,
   isLoading = false,
-}: BuyOrderFormProps) {
-  const [formData, setFormData] = React.useState({
+}) => {
+  const [formData, setFormData] = React.useState<BuyOrderFormInput>({
     clientId: '',
-    vehiclePrice: '',
+    salesPersonId: '',
+    orderDate: new Date().toISOString().split('T')[0],
     desiredDeliveryDate: '',
-
-    // 詳細条件
-    desiredMaker: '',
-    desiredModel: '',
-    desiredYear: '',
-    desiredMileage: '',
-    desiredColor: '',
-    desiredGrade: '',
-    desiredDriveType: '2wd',
-    desiredFuel: 'G',
-    desiredEquipment: [] as string[],
-
-    // 受け入れ条件
-    acceptRepairHistory: false,
-    acceptMeterTamper: false,
-    acceptRental: false,
-
-    // その他
-    budgetMax: '',
-    specialRequests: '',
     notes: '',
+    desiredVehicles: [
+      {
+        vehicleName: '',
+        maker: '',
+        model: '',
+        desiredYearFrom: undefined,
+        desiredYearTo: undefined,
+        desiredMileageMax: undefined,
+        inspectionDateMin: '',
+        color: '',
+        notes: '',
+      },
+    ],
   });
 
-  const equipmentOptions = [
-    { value: 'PS', label: 'パワーステアリング' },
-    { value: 'PW', label: 'パワーウィンドウ' },
-    { value: 'CD', label: 'CD' },
-    { value: 'MD', label: 'MD' },
-    { value: 'TV', label: 'テレビ' },
-    { value: 'NAVI', label: 'ナビゲーション' },
-    { value: 'ABS', label: 'ABS' },
-    { value: 'AIRBAG', label: 'エアバッグ' },
-    { value: 'AC', label: 'エアコン' },
-    { value: 'KEYLESS', label: 'キーレス' },
-  ];
+  // 【新規】顧客と営業担当者を API から取得
+  const [customers, setCustomers] = useState<Client[]>([]);
+  const [salesPeople, setSalesPeople] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const colorOptions = [
-    '白', 'パール', '黒', '赤', '青', '紺', '黄', '緑', '茶',
-    '金', '銀', '灰', 'ガンメタ', '橙', '紫', '桃', '肌'
-  ];
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // 顧客と営業担当者を並列取得
+        const [customersRes, salesRes] = await Promise.all([
+          fetch('/api/clients?type=customer'),
+          fetch('/api/users?role=sales'),
+        ]);
 
-  const handleEquipmentToggle = (value: string) => {
+        const customersData = await customersRes.json();
+        const salesData = await salesRes.json();
+
+        if (customersData.success) {
+          setCustomers(customersData.data);
+        } else {
+          setError('顧客情報の取得に失敗しました');
+        }
+
+        if (salesData.success) {
+          setSalesPeople(salesData.data);
+        } else {
+          setError('営業担当者情報の取得に失敗しました');
+        }
+      } catch (err) {
+        setError('データの取得に失敗しました');
+        console.error('データ取得エラー:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // 希望車両を追加
+  const addDesiredVehicle = () => {
     setFormData((prev) => ({
       ...prev,
-      desiredEquipment: prev.desiredEquipment.includes(value)
-        ? prev.desiredEquipment.filter((e) => e !== value)
-        : [...prev.desiredEquipment, value],
+      desiredVehicles: [
+        ...prev.desiredVehicles,
+        {
+          vehicleName: '',
+          maker: '',
+          model: '',
+          desiredYearFrom: undefined,
+          desiredYearTo: undefined,
+          desiredMileageMax: undefined,
+          inspectionDateMin: '',
+          color: '',
+          notes: '',
+        },
+      ],
+    }));
+  };
+
+  // 希望車両を削除
+  const removeDesiredVehicle = (index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      desiredVehicles: prev.desiredVehicles.filter((_, i) => i !== index),
+    }));
+  };
+
+  // 希望車両の入力を更新
+  const updateDesiredVehicle = (
+    index: number,
+    field: keyof DesiredVehicleFormInput,
+    value: any
+  ) => {
+    setFormData((prev) => ({
+      ...prev,
+      desiredVehicles: prev.desiredVehicles.map((vehicle, i) =>
+        i === index ? { ...vehicle, [field]: value } : vehicle
+      ),
     }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('フォームデータ送信前:', formData);
 
-    // 必須チェック
-    if (!formData.clientId || !formData.vehiclePrice) {
-      alert('顧客と車両価格は必須です');
+
+    if (formData.desiredVehicles.length === 0) {
+      alert('最低1台の希望車両を登録してください');
+      return;
+    }
+
+    const hasInvalidVehicles = formData.desiredVehicles.some(
+      (v) => !v.vehicleName
+    );
+    if (hasInvalidVehicles) {
+      alert('すべての車種名を入力してください');
       return;
     }
 
     onSubmit(formData);
   };
 
-  return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {/* 基本情報 */}
+  // 【修正】顧客オプション（API データから生成）
+  const customerOptions = customers.map((c) => ({
+    value: c.id.toString(),
+    label: `${c.name}${c.contact_person ? ` (${c.contact_person})` : ''}`,
+  }));
+
+  // 【修正】営業担当者オプション（API データから生成）
+  const salesPersonOptions = salesPeople.map((u) => ({
+    value: u.id.toString(),
+    label: u.name,
+  }));
+
+  // ローディング中の表示
+  if (loading) {
+    return (
       <Card>
+        <CardBody className="text-center py-12">
+          <p className="text-gray-500">データを読み込み中...</p>
+        </CardBody>
+      </Card>
+    );
+  }
+
+  // エラー表示
+  if (error) {
+    return (
+      <Card className="bg-red-50 border-red-200">
+        <CardBody>
+          <p className="text-red-700">エラー: {error}</p>
+        </CardBody>
+      </Card>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {/* 受注基本情報 */}
+      <Card className="mb-6">
         <CardHeader>
-          <h2 className="text-lg font-semibold text-gray-900">基本情報</h2>
+          <h2 className="text-lg font-semibold text-gray-900">受注基本情報</h2>
         </CardHeader>
         <CardBody className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                顧客 <span className="text-red-500">*</span>
-              </label>
-              <Select
-                value={formData.clientId}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, clientId: e.target.value }))
-                }
-                required
-              >
-                <option value="">選択してください</option>
-                <option value="client-001">田中自動車</option>
-                <option value="client-002">山田モータース</option>
-                <option value="client-003">鈴木カーディーラー</option>
-              </Select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                希望納期
-              </label>
-              <Input
-                type="date"
-                value={formData.desiredDeliveryDate}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    desiredDeliveryDate: e.target.value,
-                  }))
-                }
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                予算上限（万円）
-              </label>
-              <Input
-                type="number"
-                placeholder="例：150"
-                value={formData.budgetMax}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, budgetMax: e.target.value }))
-                }
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                車両価格（目安）<span className="text-red-500">*</span>
-              </label>
-              <Input
-                type="number"
-                placeholder="例：1500000"
-                value={formData.vehiclePrice}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    vehiclePrice: e.target.value,
-                  }))
-                }
-                required
-              />
-            </div>
-          </div>
-        </CardBody>
-      </Card>
-
-      {/* 車両希望条件 */}
-      <Card>
-        <CardHeader>
-          <h2 className="text-lg font-semibold text-gray-900">車両希望条件</h2>
-        </CardHeader>
-        <CardBody className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                メーカー
-              </label>
-              <Input
-                type="text"
-                placeholder="例：トヨタ"
-                value={formData.desiredMaker}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    desiredMaker: e.target.value,
-                  }))
-                }
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                型式
-              </label>
-              <Input
-                type="text"
-                placeholder="例：GRX120"
-                value={formData.desiredModel}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    desiredModel: e.target.value,
-                  }))
-                }
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                年式
-              </label>
-              <Input
-                type="text"
-                placeholder="例：2020年～2023年"
-                value={formData.desiredYear}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    desiredYear: e.target.value,
-                  }))
-                }
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                グレード
-              </label>
-              <Input
-                type="text"
-                placeholder="例：Sエディション"
-                value={formData.desiredGrade}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    desiredGrade: e.target.value,
-                  }))
-                }
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                走行距離
-              </label>
-              <Input
-                type="text"
-                placeholder="例：50000km以下"
-                value={formData.desiredMileage}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    desiredMileage: e.target.value,
-                  }))
-                }
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                色
-              </label>
-              <Select
-                value={formData.desiredColor}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    desiredColor: e.target.value,
-                  }))
-                }
-              >
-                <option value="">選択してください</option>
-                {colorOptions.map((color) => (
-                  <option key={color} value={color}>
-                    {color}
-                  </option>
-                ))}
-              </Select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                駆動方式
-              </label>
-              <Select
-                value={formData.desiredDriveType}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    desiredDriveType: e.target.value as any,
-                  }))
-                }
-              >
-                <option value="all">指定なし</option>
-                <option value="2wd">2WD</option>
-                <option value="4wd">4WD</option>
-              </Select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                燃料
-              </label>
-              <Select
-                value={formData.desiredFuel}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    desiredFuel: e.target.value,
-                  }))
-                }
-              >
-                <option value="all">指定なし</option>
-                <option value="G">ガソリン</option>
-                <option value="D">ディーゼル</option>
-                <option value="E">電気</option>
-                <option value="HV">ハイブリッド</option>
-              </Select>
-            </div>
-          </div>
-
-          {/* 希望装備 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              希望装備
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {equipmentOptions.map((eq) => (
-                <button
-                  key={eq.value}
-                  type="button"
-                  onClick={() => handleEquipmentToggle(eq.value)}
-                  className={`px-3 py-2 rounded text-sm font-medium transition-colors ${formData.desiredEquipment.includes(eq.value)
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                    }`}
-                >
-                  {eq.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </CardBody>
-      </Card>
-
-      {/* 受け入れ条件 */}
-      <Card>
-        <CardHeader>
-          <h2 className="text-lg font-semibold text-gray-900">受け入れ条件</h2>
-        </CardHeader>
-        <CardBody className="space-y-4">
-          <div className="space-y-3">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.acceptRepairHistory}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    acceptRepairHistory: e.target.checked,
-                  }))
-                }
-                className="w-4 h-4"
-              />
-              <span className="text-sm text-gray-700">修復歴有の車両を受け入れる</span>
-            </label>
-
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.acceptMeterTamper}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    acceptMeterTamper: e.target.checked,
-                  }))
-                }
-                className="w-4 h-4"
-              />
-              <span className="text-sm text-gray-700">
-                メーター改ざん車を受け入れる
-              </span>
-            </label>
-
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.acceptRental}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    acceptRental: e.target.checked,
-                  }))
-                }
-                className="w-4 h-4"
-              />
-              <span className="text-sm text-gray-700">レンタカーを受け入れる</span>
-            </label>
-          </div>
-        </CardBody>
-      </Card>
-
-      {/* 特別要望・備考 */}
-      <Card>
-        <CardHeader>
-          <h2 className="text-lg font-semibold text-gray-900">特別要望・備考</h2>
-        </CardHeader>
-        <CardBody className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              特別なご要望
-            </label>
-            <textarea
-              value={formData.specialRequests}
+            <Select
+              label="顧客"
+              options={[
+                { value: '', label: '選択してください' },
+                ...customerOptions
+              ]}
+              value={formData.clientId}
               onChange={(e) =>
                 setFormData((prev) => ({
                   ...prev,
-                  specialRequests: e.target.value,
+                  clientId: e.target.value,
                 }))
               }
-              placeholder="例：急ぎで納品希望、内装は綺麗な状態希望"
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+
+            <Select
+              label="営業担当者"
+              options={[
+                { value: '', label: '選択してください' },
+                ...salesPersonOptions
+              ]}
+              value={formData.salesPersonId}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  salesPersonId: e.target.value,
+                }))
+              }
+              required
+            />
+
+            <Input
+              label="受注日"
+              type="date"
+              value={formData.orderDate}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  orderDate: e.target.value,
+                }))
+              }
+              required
+            />
+
+            <Input
+              label="希望納期"
+              type="date"
+              value={formData.desiredDeliveryDate}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  desiredDeliveryDate: e.target.value,
+                }))
+              }
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               備考
             </label>
             <textarea
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              rows={3}
+              placeholder="特別な指示や備考があれば記入してください"
               value={formData.notes}
               onChange={(e) =>
                 setFormData((prev) => ({
@@ -434,31 +277,176 @@ export function BuyOrderForm({
                   notes: e.target.value,
                 }))
               }
-              placeholder="その他の備考があればご記入ください"
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
         </CardBody>
       </Card>
 
-      {/* 送信ボタン */}
-      <div className="flex gap-3 justify-end">
+      {/* 希望車両情報 */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">希望車両情報</h2>
+          <Badge variant="bg-blue-100 text-blue-800">
+            {formData.desiredVehicles.length}台
+          </Badge>
+        </div>
+
+        {formData.desiredVehicles.map((vehicle, index) => (
+          <Card key={index} className="mb-4">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <h3 className="font-medium text-gray-900">
+                  {vehicle.vehicleName || `希望車両 ${index + 1}`}
+                </h3>
+                {formData.desiredVehicles.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeDesiredVehicle(index)}
+                    className="text-red-600 hover:bg-red-50"
+                  >
+                    削除
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardBody className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  label="車種名（必須）"
+                  placeholder="例：トヨタ プリウス"
+                  value={vehicle.vehicleName}
+                  onChange={(e) =>
+                    updateDesiredVehicle(index, 'vehicleName', e.target.value)
+                  }
+                  required
+                />
+
+                <Input
+                  label="メーカー"
+                  placeholder="例：トヨタ"
+                  value={vehicle.maker || ''}
+                  onChange={(e) =>
+                    updateDesiredVehicle(index, 'maker', e.target.value)
+                  }
+                />
+
+                <Input
+                  label="型式"
+                  placeholder="例：プリウス"
+                  value={vehicle.model || ''}
+                  onChange={(e) =>
+                    updateDesiredVehicle(index, 'model', e.target.value)
+                  }
+                />
+
+                <Input
+                  label="色"
+                  placeholder="例：シルバー"
+                  value={vehicle.color || ''}
+                  onChange={(e) =>
+                    updateDesiredVehicle(index, 'color', e.target.value)
+                  }
+                />
+
+                <Input
+                  label="希望年式（開始）"
+                  type="number"
+                  placeholder="例：2020"
+                  value={vehicle.desiredYearFrom || ''}
+                  onChange={(e) =>
+                    updateDesiredVehicle(
+                      index,
+                      'desiredYearFrom',
+                      e.target.value ? parseInt(e.target.value) : undefined
+                    )
+                  }
+                />
+
+                <Input
+                  label="希望年式（終了）"
+                  type="number"
+                  placeholder="例：2023"
+                  value={vehicle.desiredYearTo || ''}
+                  onChange={(e) =>
+                    updateDesiredVehicle(
+                      index,
+                      'desiredYearTo',
+                      e.target.value ? parseInt(e.target.value) : undefined
+                    )
+                  }
+                />
+
+                <Input
+                  label="走行距離上限（km）"
+                  type="number"
+                  placeholder="例：50000"
+                  value={vehicle.desiredMileageMax || ''}
+                  onChange={(e) =>
+                    updateDesiredVehicle(
+                      index,
+                      'desiredMileageMax',
+                      e.target.value ? parseInt(e.target.value) : undefined
+                    )
+                  }
+                />
+
+                <Input
+                  label="希望車検期限（最小）"
+                  type="date"
+                  value={vehicle.inspectionDateMin || ''}
+                  onChange={(e) =>
+                    updateDesiredVehicle(
+                      index,
+                      'inspectionDateMin',
+                      e.target.value
+                    )
+                  }
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  この車両に関する備考
+                </label>
+                <textarea
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  rows={2}
+                  placeholder="希望仕様や特別な要望があれば記入してください"
+                  value={vehicle.notes || ''}
+                  onChange={(e) =>
+                    updateDesiredVehicle(index, 'notes', e.target.value)
+                  }
+                />
+              </div>
+            </CardBody>
+          </Card>
+        ))}
+
         <Button
           type="button"
           variant="secondary"
-          disabled={isLoading}
+          onClick={addDesiredVehicle}
+          fullWidth
         >
-          キャンセル
-        </Button>
-        <Button
-          type="submit"
-          variant="primary"
-          disabled={isLoading}
-        >
-          {isLoading ? '登録中...' : '買い注文を登録'}
+          + 希望車両を追加
         </Button>
       </div>
+
+      {/* フッター */}
+      <Card>
+        <CardFooter className="flex gap-3 justify-end">
+          <Button type="button" variant="secondary" disabled={isLoading}>
+            キャンセル
+          </Button>
+          <Button type="submit" variant="primary" isLoading={isLoading}>
+            受注を登録
+          </Button>
+        </CardFooter>
+      </Card>
     </form>
   );
-}
+};
+
+BuyOrderForm.displayName = 'BuyOrderForm';

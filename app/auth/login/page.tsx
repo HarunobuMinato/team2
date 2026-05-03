@@ -6,7 +6,47 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardBody, CardHeader } from '@/components/ui/card';
-import { demoUsers } from '@/data/users';
+
+interface AuthResponse {
+  success: boolean;
+  data?: {
+    id: number;
+    email: string;
+    name: string;
+    role: string;
+    client_id?: number;
+  };
+  error?: string;
+}
+
+interface DemoUser {
+  email: string;
+  name: string;
+  password: string;
+  role: string;
+}
+
+// デモアカウント（DBから取得する前提）
+const demoUsers: DemoUser[] = [
+  {
+    email: 'customer@example.com',
+    name: '顧客 太郎',
+    password: 'password123',
+    role: 'customer',
+  },
+  {
+    email: 'vendor@example.com',
+    name: 'ベンダー 花子',
+    password: 'password123',
+    role: 'vendor',
+  },
+  {
+    email: 'admin@example.com',
+    name: '管理者 次郎',
+    password: 'password123',
+    role: 'admin',
+  },
+];
 
 export default function LoginPage() {
   const router = useRouter();
@@ -15,51 +55,81 @@ export default function LoginPage() {
   const [error, setError] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
 
+  /**
+   * ログイン処理
+   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
 
     try {
-      // デモ用：メール・パスワードの検証
-      const user = demoUsers.find(
-        (u) => u.email === email && u.password === password,
-      );
+      console.log('🔄 ログイン処理開始:', email);
 
-      if (!user) {
-        setError('メールアドレスまたはパスワードが正しくありません');
+      // API を呼び出し
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = (await response.json()) as AuthResponse;
+
+      if (!response.ok || !data.success) {
+        console.error('❌ ログイン失敗:', data.error);
+        setError(data.error || 'ログインに失敗しました');
         setIsLoading(false);
         return;
       }
 
-      // ログイン成功時：ユーザー情報をセッションストレージに保存
-      // （実際にはバックエンドで認証し、tokenを取得）
-      sessionStorage.setItem(
-        'user',
-        JSON.stringify({
-          id: 'user-001',
-          email,
-          name: user.name,
-          role: email === 'customer@example.com' ? 'customer' : email === 'vendor@example.com' ? 'vendor' : 'admin',
-        }),
-      );
+      if (!data.data) {
+        setError('ユーザー情報の取得に失敗しました');
+        setIsLoading(false);
+        return;
+      }
+
+      console.log('🔐 ユーザー情報取得成功:', data.data);
+      // ログイン成功：ユーザー情報をセッションストレージに保存
+      const userInfo = {
+        id: data.data.id,
+        email: data.data.email,
+        name: data.data.name,
+        role: data.data.role,
+        client_id: (data.data as any).client_id,
+      };
+
+      console.log('✅ ログイン成功:', userInfo);
+
+      sessionStorage.setItem('user', JSON.stringify(userInfo));
 
       // ロールに応じてリダイレクト
-      if (email === 'customer@example.com' || email === 'vendor@example.com') {
-        router.push('/portal/portal');
+      if (data.data.role === 'customer' || data.data.role === 'vendor') {
+        console.log('📍 カスタマーポータルへリダイレクト');
+        router.push('/portal');
+      } else if (data.data.role === 'admin' || data.data.role === 'sales') {
+        console.log('📍 管理画面へリダイレクト');
+        router.push('/main');
       } else {
-        router.push('/dashboard');
+        console.log('📍 ダッシュボードへリダイレクト');
+        router.push('/');
       }
     } catch (err) {
-      setError('ログインに失敗しました');
+      console.error('❌ ログインエラー:', err);
+      setError('ログイン処理中にエラーが発生しました');
     } finally {
       setIsLoading(false);
     }
   };
 
+  /**
+   * デモアカウントでクイックログイン
+   */
   const quickLogin = (demoEmail: string) => {
-    setEmail(demoEmail);
-    setPassword('password123');
+    const user = demoUsers.find((u) => u.email === demoEmail);
+    if (user) {
+      setEmail(user.email);
+      setPassword(user.password);
+    }
   };
 
   return (
@@ -67,7 +137,9 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="text-5xl mb-4">🚗</div>
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">車両売買システム</h1>
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">
+            車両売買システム
+          </h1>
           <p className="text-gray-600">受注・請求・入金管理システム</p>
         </div>
 
@@ -107,7 +179,7 @@ export default function LoginPage() {
                 isLoading={isLoading}
                 className="mt-6"
               >
-                ログイン
+                {isLoading ? 'ログイン中...' : 'ログイン'}
               </Button>
 
               <Link

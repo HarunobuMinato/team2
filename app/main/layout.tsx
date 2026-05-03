@@ -28,17 +28,17 @@ export default function MainLayout({
           setUser(fullUser);
         }
       } catch (err) {
-        router.push('/login');
+        router.push('/auth/login');
       }
     } else {
-      router.push('/login');
+      router.push('/auth/login');
     }
     setIsLoading(false);
   }, [router]);
 
   const handleLogout = () => {
     sessionStorage.removeItem('user');
-    router.push('/login');
+    router.push('/auth/login');
   };
 
   if (isLoading) {
@@ -54,7 +54,7 @@ export default function MainLayout({
 
   // ポータルユーザーの場合はここにアクセスできないようにする
   if (user && ['customer', 'vendor'].includes(user.role)) {
-    router.push('/portal/portal');
+    router.push('/portal');
     return null;
   }
 

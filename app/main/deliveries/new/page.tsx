@@ -1,48 +1,59 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layouts/page-header';
 import { DeliveryForm } from '@/components/forms/delivery-form';
-import { generateDeliveryNumber } from '@/lib/utils';
 
 export default function DeliveryNewPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const purchaseId = searchParams.get('purchaseId');
+  const orderId = searchParams.get('orderId');
 
-  const [isLoading, setIsLoading] = React.useState(false);
-  const [successMessage, setSuccessMessage] = React.useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (formData: any) => {
     setIsLoading(true);
+    setError(null);
 
     try {
-      // バックエンド実装時のシミュレーション
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      console.log('🔄 納品書登録処理開始');
+      console.log('📤 送信するデータ:', formData);
 
-      // 実際はバックエンドに送信
-      const deliveryData = {
-        ...formData,
-        deliveryNumber: generateDeliveryNumber(),
-        purchaseId: purchaseId || undefined,
-        status: 'issued',
-        createdAt: new Date().toISOString(),
-      };
+      const response = await fetch('/api/deliveries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
 
-      console.log('送信するデータ:', deliveryData);
+      const result = await response.json();
 
-      // 成功メッセージ表示
-      setSuccessMessage(`納品書番号 ${deliveryData.deliveryNumber} で作成しました`);
+      console.log('📩 レスポンス:', result);
 
-      // 2秒後に一覧画面にリダイレクト
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || '納品書の登録に失敗しました');
+      }
+
+      console.log(
+        `✅ 納品書登録成功 - ID: ${result.data?.id}, 納品書番号: ${result.data?.delivery_number}`
+      );
+
+      setSuccessMessage(
+        `納品書番号 ${result.data?.delivery_number} で作成しました`
+      );
+
+      // 2秒後に一覧にリダイレクト
       setTimeout(() => {
         router.push('/main/deliveries');
       }, 2000);
-    } catch (error) {
-      console.error('エラー:', error);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'エラーが発生しました';
+      console.error('❌ エラー:', errorMessage);
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -52,7 +63,7 @@ export default function DeliveryNewPage() {
     <div>
       <PageHeader
         title="納品書作成"
-        subtitle="新規に納品書を作成します"
+        subtitle="受注に対して納品書を作成します"
         actions={
           <Link href="/main/deliveries">
             <Button variant="secondary">戻る</Button>
@@ -66,8 +77,14 @@ export default function DeliveryNewPage() {
         </div>
       )}
 
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-red-700">❌ {error}</p>
+        </div>
+      )}
+
       <DeliveryForm
-        purchaseId={purchaseId || undefined}
+        orderId={orderId || undefined}
         onSubmit={handleSubmit}
         isLoading={isLoading}
       />

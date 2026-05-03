@@ -10,10 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { mockInvoices } from '@/data/invoices';
 import { mockOrders } from '@/data/orders';
 import { mockClients } from '@/data/clients';
-import {
-  INVOICE_STATUS_LABELS,
-  INVOICE_STATUS_COLORS,
-} from '@/constants/status';
+import { mockDeliveries } from '@/data/deliveries';
 import { formatCurrency, formatDateJP } from '@/lib/utils';
 
 export default function InvoiceDetailPage() {
@@ -21,23 +18,56 @@ export default function InvoiceDetailPage() {
   const invoiceId = params.id as string;
 
   const invoice = mockInvoices.find((i) => i.id === invoiceId);
-  const order = invoice && mockOrders.find((o) => o.id === invoice.orderId);
-  const client = invoice && mockClients.find((c) => c.id === invoice.clientId);
 
   if (!invoice) {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500 text-lg mb-4">請求書が見つかりません</p>
-        <Link href="/invoices">
+        <Link href="/main/invoices">
           <Button>請求書一覧に戻る</Button>
         </Link>
       </div>
     );
   }
 
+  // 関連データの取得
+  const client = mockClients.find((c) => c.id === invoice.clientId);
+  const order = invoice.orderId
+    ? mockOrders.find((o) => o.id === invoice.orderId)
+    : null;
+
+  // 請求書に紐づいた納品書を取得（invoice.deliveryIds配列から）
+  const relatedDeliveries = (invoice.deliveryIds || [])
+    .map((id) => mockDeliveries.find((d) => d.id === id))
+    .filter(Boolean);
+
+  // ステータス色
+  const getStatusColor = (status: string): string => {
+    const colors: Record<string, string> = {
+      draft: 'bg-gray-100 text-gray-800',
+      issued: 'bg-blue-100 text-blue-800',
+      partial: 'bg-amber-100 text-amber-800',
+      paid: 'bg-green-100 text-green-800',
+      overdue: 'bg-red-100 text-red-800',
+    };
+    return colors[status] || 'bg-gray-100 text-gray-800';
+  };
+
+  const getStatusLabel = (status: string): string => {
+    const labels: Record<string, string> = {
+      draft: '下書き',
+      issued: '発行済み',
+      partial: '部分支払',
+      paid: '支払済み',
+      overdue: '期限切れ',
+    };
+    return labels[status] || status;
+  };
+
   const remainingAmount = invoice.totalAmount - invoice.paidAmount;
   const isPaid = invoice.paidAmount === invoice.totalAmount;
-  const isPartial = invoice.paidAmount > 0 && invoice.paidAmount < invoice.totalAmount;
+  const isPartial =
+    invoice.paidAmount > 0 && invoice.paidAmount < invoice.totalAmount;
 
   return (
     <div>
@@ -46,8 +76,15 @@ export default function InvoiceDetailPage() {
         subtitle={invoice.invoiceNumber}
         actions={
           <div className="flex gap-2">
-            <Button variant="secondary">印刷</Button>
-            <Link href="/invoices">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                window.print();
+              }}
+            >
+              🖨️ 印刷
+            </Button>
+            <Link href="/main/invoices">
               <Button variant="secondary">戻る</Button>
             </Link>
           </div>
@@ -57,12 +94,15 @@ export default function InvoiceDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* 基本情報 */}
         <div className="lg:col-span-2">
+          {/* 請求書情報 */}
           <Card className="mb-6">
             <CardHeader>
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900">請求書情報</h2>
-                <Badge variant={INVOICE_STATUS_COLORS[invoice.status]}>
-                  {INVOICE_STATUS_LABELS[invoice.status]}
+                <h2 className="text-lg font-semibold text-gray-900">
+                  請求書情報
+                </h2>
+                <Badge variant={getStatusColor(invoice.status)}>
+                  {getStatusLabel(invoice.status)}
                 </Badge>
               </div>
             </CardHeader>
@@ -87,14 +127,14 @@ export default function InvoiceDetailPage() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600 mb-1">受注番号</p>
+                  <p className="text-sm text-gray-600 mb-1">納品書件数</p>
                   <p className="text-base font-medium text-gray-900">
-                    {order?.orderNumber || '-'}
+                    {relatedDeliveries.length}件
                   </p>
                 </div>
               </div>
 
-              {/* 取引先情報 */}
+              {/* 請求先情報 */}
               <div className="border-t border-gray-200 pt-6">
                 <h3 className="text-base font-semibold text-gray-900 mb-3">
                   請求先
@@ -105,9 +145,50 @@ export default function InvoiceDetailPage() {
                 {client?.contactPerson && (
                   <p className="text-sm text-gray-600">{client.contactPerson}</p>
                 )}
+                {client?.address && (
+                  <p className="text-sm text-gray-600 mt-2">{client.address}</p>
+                )}
               </div>
             </CardBody>
           </Card>
+
+          {/* 納品書一覧 */}
+          {relatedDeliveries.length > 0 && (
+            <Card className="mb-6">
+              <CardHeader>
+                <h2 className="text-lg font-semibold text-gray-900">
+                  対象納品書
+                </h2>
+              </CardHeader>
+              <CardBody>
+                <div className="space-y-3">
+                  {relatedDeliveries.map((delivery) => (
+                    <Link
+                      key={delivery?.id}
+                      href={`/main/deliveries/${delivery?.id}`}
+                      className="block p-3 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-colors"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="font-medium text-gray-900">
+                            {delivery?.deliveryNumber}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {formatDateJP(delivery?.deliveryDate || new Date())}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold text-gray-900">
+                            {formatCurrency(delivery?.totalAmount || 0)}
+                          </p>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </CardBody>
+            </Card>
+          )}
 
           {/* 支払情報 */}
           <Card>
@@ -187,7 +268,9 @@ export default function InvoiceDetailPage() {
 
                 <div className="border-t border-gray-200 pt-3">
                   <div className="flex justify-between mb-4">
-                    <span className="font-semibold text-gray-900">請求合計</span>
+                    <span className="font-semibold text-gray-900">
+                      請求合計
+                    </span>
                     <span className="text-xl font-bold text-blue-600">
                       {formatCurrency(invoice.totalAmount)}
                     </span>
@@ -206,7 +289,9 @@ export default function InvoiceDetailPage() {
                     <span className="text-gray-600">未払い</span>
                     <span
                       className={`font-medium ${
-                        remainingAmount > 0 ? 'text-orange-600' : 'text-green-600'
+                        remainingAmount > 0
+                          ? 'text-orange-600'
+                          : 'text-green-600'
                       }`}
                     >
                       {formatCurrency(remainingAmount)}
@@ -219,9 +304,7 @@ export default function InvoiceDetailPage() {
                   <div className="flex justify-between text-xs">
                     <span className="text-gray-600">支払率</span>
                     <span className="font-medium">
-                      {Math.round(
-                        (invoice.paidAmount / invoice.totalAmount) * 100,
-                      )}
+                      {Math.round((invoice.paidAmount / invoice.totalAmount) * 100)}
                       %
                     </span>
                   </div>
@@ -235,9 +318,7 @@ export default function InvoiceDetailPage() {
                             : 'bg-gray-300'
                       }`}
                       style={{
-                        width: `${
-                          (invoice.paidAmount / invoice.totalAmount) * 100
-                        }%`,
+                        width: `${(invoice.paidAmount / invoice.totalAmount) * 100}%`,
                       }}
                     />
                   </div>

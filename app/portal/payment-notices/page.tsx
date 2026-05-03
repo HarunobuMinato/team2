@@ -48,7 +48,7 @@ export default function PortalPaymentNoticeListPage() {
       ) : (
         <div className="space-y-4">
           {userNotices.map((notice) => (
-            <Link key={notice.id} href={`/portal/portal/payment-notices/${notice.id}`}>
+            <Link key={notice.id} href={`/portal/payment-notices/${notice.id}`}>
               <Card className="hover:shadow-md transition-shadow cursor-pointer">
                 <CardBody>
                   <div className="flex items-start justify-between mb-4">

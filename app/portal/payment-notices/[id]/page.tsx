@@ -23,7 +23,7 @@ export default function PortalPaymentNoticeDetailPage() {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500 text-lg mb-4">支払通知書が見つかりません</p>
-        <Link href="/portal/portal/payment-notices">
+        <Link href="/portal/payment-notices">
           <Button>支払通知書一覧に戻る</Button>
         </Link>
       </div>
@@ -38,7 +38,7 @@ export default function PortalPaymentNoticeDetailPage() {
         actions={
           <div className="flex gap-2">
             <Button variant="secondary">印刷</Button>
-            <Link href="/portal/portal/payment-notices">
+            <Link href="/portal/payment-notices">
               <Button variant="secondary">戻る</Button>
             </Link>
           </div>

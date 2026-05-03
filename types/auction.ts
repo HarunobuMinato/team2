@@ -1,3 +1,7 @@
+// ==========================================
+// オークション関連の型定義
+// ==========================================
+
 // オークション会場情報
 export interface AuctionVenue {
   id: string;
@@ -20,6 +24,7 @@ export type AuctionStatus = 'pending' | 'won' | 'lost' | 'sold' | 'unsold';
 // オークション情報
 export interface Auction {
   id: string;
+  purchaseRecordId?: string; // 【新規】FK: 仕入実績ID（買い注文の場合）
   orderId: string;
   venueId: string;
   auctionDate: Date;
@@ -38,6 +43,7 @@ export type StatementPaymentStatus = 'unpaid' | 'paid';
 // オークション計算書
 export interface AuctionStatement {
   id: string;
+  purchaseRecordId?: string; // 【新規】FK: 仕入実績ID
   auctionId: string;
   receivedDate: Date;
   vehiclePrice: number;

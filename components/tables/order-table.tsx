@@ -35,23 +35,23 @@ export const OrderTable: React.FC<OrderTableProps> = ({
   onRowClick,
 }) => {
   const getStatusLabel = (order: Order): string => {
-    if (order.orderType === 'buy') {
-      return BUY_ORDER_STATUS_LABELS[order.status as any];
+    if (order.order_type === 'buy') {
+      return BUY_ORDER_STATUS_LABELS[order.status as any] || order.status;
     }
-    if (order.orderType === 'sell') {
-      return SELL_ORDER_STATUS_LABELS[order.status as any];
+    if (order.order_type === 'sell') {
+      return SELL_ORDER_STATUS_LABELS[order.status as any] || order.status;
     }
-    return MEDIATION_ORDER_STATUS_LABELS[order.status as any];
+    return MEDIATION_ORDER_STATUS_LABELS[order.status as any] || order.status;
   };
 
   const getStatusColor = (order: Order): string => {
-    if (order.orderType === 'buy') {
-      return BUY_ORDER_STATUS_COLORS[order.status as any];
+    if (order.order_type === 'buy') {
+      return BUY_ORDER_STATUS_COLORS[order.status as any] || 'bg-gray-100 text-gray-800';
     }
-    if (order.orderType === 'sell') {
-      return SELL_ORDER_STATUS_COLORS[order.status as any];
+    if (order.order_type === 'sell') {
+      return SELL_ORDER_STATUS_COLORS[order.status as any] || 'bg-gray-100 text-gray-800';
     }
-    return MEDIATION_ORDER_STATUS_COLORS[order.status as any];
+    return MEDIATION_ORDER_STATUS_COLORS[order.status as any] || 'bg-gray-100 text-gray-800';
   };
 
   const getOrderTypeLabel = (type: string): string => {
@@ -87,6 +87,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
           <TableHeaderCell>注文種別</TableHeaderCell>
           <TableHeaderCell>受注日</TableHeaderCell>
           <TableHeaderCell>希望納期</TableHeaderCell>
+          <TableHeaderCell align="center">車両台数</TableHeaderCell>
           <TableHeaderCell align="right">金額</TableHeaderCell>
           <TableHeaderCell>ステータス</TableHeaderCell>
           <TableHeaderCell>操作</TableHeaderCell>
@@ -96,17 +97,22 @@ export const OrderTable: React.FC<OrderTableProps> = ({
         {orders.map((order) => (
           <TableRow key={order.id}>
             <TableCell className="font-medium text-blue-600">
-              {order.orderNumber}
+              {order.order_number}
             </TableCell>
-            <TableCell>{getOrderTypeLabel(order.orderType)}</TableCell>
+            <TableCell>{getOrderTypeLabel(order.order_type)}</TableCell>
             <TableCell className="text-sm text-gray-600">
-              {formatDate(order.orderDate)}
+              {formatDate(order.order_date)}
             </TableCell>
             <TableCell className="text-sm text-gray-600">
-              {order.desiredDeliveryDate ? formatDate(order.desiredDeliveryDate) : '-'}
+              {order.desired_delivery_date
+                ? formatDate(order.desired_delivery_date)
+                : '-'}
+            </TableCell>
+            <TableCell align="center" className="font-semibold">
+              {order.vehicle_count}台
             </TableCell>
             <TableCell align="right" className="font-semibold">
-              {formatCurrency(order.totalAmount)}
+              {formatCurrency(order.total_amount || 0)}
             </TableCell>
             <TableCell>
               <Badge variant={getStatusColor(order)}>
@@ -114,7 +120,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
               </Badge>
             </TableCell>
             <TableCell>
-              <Link href={`/orders/${order.id}`}>
+              <Link href={`/main/orders/${order.id}`}>
                 <Button variant="ghost" size="sm">
                   詳細
                 </Button>

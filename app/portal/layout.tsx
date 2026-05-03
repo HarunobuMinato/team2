@@ -28,17 +28,17 @@ export default function PortalLayout({
           setUser(fullUser);
         }
       } catch (err) {
-        router.push('/login');
+        router.push('/auth/login');
       }
     } else {
-      router.push('/login');
+      router.push('/auth/login');
     }
     setIsLoading(false);
   }, [router]);
 
   const handleLogout = () => {
     sessionStorage.removeItem('user');
-    router.push('/login');
+    router.push('/auth/login');
   };
 
   if (isLoading) {
